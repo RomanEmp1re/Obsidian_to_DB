@@ -32,8 +32,8 @@ class Daysstatistics:
         for date in self.dates:
             note = obsidian.DailyNote(date)
             self.data.loc[date] = [
-                pd.to_datetime(note.day_begin),
-                pd.to_datetime(note.day_end),
+                pd.to_datetime(note.day_begin, utc=True),
+                pd.to_datetime(note.day_end, utc=True),
                 pd.NA,
                 pd.NA,
                 pd.NA,
@@ -41,7 +41,11 @@ class Daysstatistics:
                 pd.NA,
                 pd.NA
             ]
-        # self.data.slept = self.data['begin'] - self.data['end'].shift(1)
+        self.data['prev_end'] = self.data['end'].shift(1)
+        mask = self.data['begin'].notna() & self.data['prev_end'].notna() 
+        self.data.loc[mask, 'slept'] = self.data.loc[mask, 'begin'] -\
+            self.data.loc[mask, 'prev_end']
+        
 
 if __name__ == '__main__':
     d = Daysstatistics()
