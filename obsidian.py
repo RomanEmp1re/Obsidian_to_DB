@@ -1,4 +1,4 @@
-'''
+'''obsidian.py
 Интерфейсы для работы с markdown файламии из obsidian, для извлечения и обработки
 этих данных
 '''
@@ -16,7 +16,7 @@ class FileFormatError(Exception):
 
 
 class DailyNote:
-    '''Класс для ежедневной заметки'''
+    # Class for daily note
     vault_path = VAULT_PATH
     def __init__(self, date):
         self.date = date
@@ -112,6 +112,14 @@ class DailyNote:
                 return h.value
         return
 
+    @property
+    def slept(self):
+        prev_note = DailyNote(self.date - dt.timedelta(days=1))
+        prev_day_end = prev_note.day_end
+        if prev_day_end:
+            return self.day_begin - prev_note.day_end
+        else:
+            return
 
 class Task:
     '''Класс для задачи'''
@@ -134,18 +142,12 @@ class Habit:
             raise TypeError('Атрибут name должен быть типа str')
         self.name = name
         self.value = value
-        if isinstance(value, int):
-            self.value_int = value
-        elif type(value) == bool:
-                self.value_int = 1 if value else 0
-        else:
-            self.value_int = None
     
     def __str__(self):
         return self.name + ' - ' + str(self.value)
 
 
 if __name__ == '__main__':
-    my_date = dt.date(2025, 8, 11)
+    my_date = dt.date(2025, 8, 16)
     d = DailyNote(my_date)
-    print(d.get_first_date())
+    print(d.slept)
