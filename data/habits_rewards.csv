@@ -1,6 +1,14 @@
-;Unnamed: 0;name;type;target_float;target_str;target_bool;reward;valid_from
-0;2;drinking;float;0.0;;;-1;2025-05-08
-1;3;drinking;float;1500.0;;;0;2025-08-08
-2;5;hobby;str;;music;;1;2025-07-25
-3;6;hobby;str;;dancing;;1;2025-07-25
-4;8;hobby;str;;art;;2;2025-07-25
+;name;type;target_float;target_str;target_bool;reward;valid_from
+0;Спорт;float;60.0;;;1.0;2000-01-01
+0;Спорт;float;0;;;0;2000-01-01
+1;Самообразование;float;60.0;;;1.0;2000-01-01
+1;Самообразование;float;0;;;1.0;2000-01-01
+2;Утренняя зарядка;bool;;;True;1.0;2025-08-01
+2;Утренняя зарядка;bool;;;False;0;2025-08-01
+3;Медитация;bool;;;True;1.0;2025-08-01
+3;Медитация;bool;;;False;0;2025-08-01
+4;Подходы;float;1.0;;;1.0;2025-06-01
+5;Общение;bool;;;True;1.0;2025-06-01
+5;Общение;bool;;;False;0;2025-06-01
+6;Подходы;float;3.0;;;3.0;2025-06-01
+6;Подходы;float;0;;;0;2025-06-01

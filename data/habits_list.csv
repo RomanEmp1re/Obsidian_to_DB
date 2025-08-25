@@ -1,1 +1,5 @@
-name;unit
+name;unit;measure_kind
+Спорт;мин;float
+Самообразование;мин;float
+Подходы;раз;float
+Общение;;bool
