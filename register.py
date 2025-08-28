@@ -5,7 +5,7 @@ import datetime as dt
 import obsidian as o
 import os
 from config import DATA_DIR
-from reward_system import HabitRewards, SleepReward
+from dictionaries import HabitRewards, SleepReward
 
 
 class BaseStatistics:
