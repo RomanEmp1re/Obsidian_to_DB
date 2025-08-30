@@ -18,6 +18,7 @@ class FileFormatError(Exception):
 class DailyNote:
     # Class for daily note
     vault_path = VAULT_PATH
+    default_reward_for_task = 1
     def __init__(self, date):
         self.date = date
         self.note_name = dt.date.isoformat(date) + '.md'
@@ -69,17 +70,22 @@ class DailyNote:
     def tasks_list(self) -> list:
         tasks_block = re.search(r'# Tasks\s*(.*)', self.note_content, re.DOTALL)
         if not tasks_block:
-            logging.error("Block with tasks wasn't found")
-            raise FileFormatError("Block with tasks wasn't found")
+            logging.warning("Block with tasks wasn't found")
+            return []
         task_lines = tasks_block.group(1).splitlines()
-        task_pattern = re.compile(r"- \[( |x)\] (.+?) \((\d+)\)")
+        task_pattern = re.compile(r"- \[( |x)\] ([A-z0-9]+)")
+        reward_pattern = re.compile(r".*\((\d+)\)")
         tasks = []
         for line in task_lines:
             match = task_pattern.match(line.strip())
             if match:
                 is_done = match.group(1) != " "
                 name = match.group(2).strip()
-                reward = int(match.group(3))
+                reward = reward_pattern.match(line)
+                if reward:
+                    reward = int(reward.group(1))
+                else:
+                    reward = self.default_reward_for_task
                 comment = None
                 tasks.append(Task(is_done, name, reward, comment))
         if len(tasks) == 0:
@@ -98,28 +104,6 @@ class DailyNote:
             raise
         return [Habit(k, v) for k, v in habits_list.items()]
 
-    @property
-    def day_begin(self):
-        for h in self.habits_list:
-            if h.name == 'Day begin':
-                return h.value
-        return
-        
-    @property
-    def day_end(self):
-        for h in self.habits_list:
-            if h.name == 'Day end':
-                return h.value
-        return
-
-    @property
-    def slept(self):
-        prev_note = DailyNote(self.date - dt.timedelta(days=1))
-        prev_day_end = prev_note.day_end
-        if prev_day_end:
-            return self.day_begin - prev_note.day_end
-        else:
-            return
 
 class Task:
     '''Класс для задачи'''
@@ -139,7 +123,7 @@ class Habit:
     '''Класс для привычек'''
     def __init__(self, name, value):
         if not isinstance(name, str):
-            raise TypeError('Атрибут name должен быть типа str')
+            raise TypeError('"name" atribute must be str')
         self.name = name
         self.value = value
     
@@ -148,6 +132,6 @@ class Habit:
 
 
 if __name__ == '__main__':
-    my_date = dt.date(2025, 8, 16)
+    my_date = dt.date(2025, 6, 2)
     d = DailyNote(my_date)
-    print(d.slept)
+    print(d.describe())
