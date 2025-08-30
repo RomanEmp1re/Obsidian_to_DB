@@ -1,11 +1,12 @@
 # register.py
+# saves habits, tasks and days into csv files
 
 import pandas as pd
 import datetime as dt
 import obsidian as o
+from obsidian import FileFormatError
 import os
 from config import DATA_DIR
-from dictionaries import HabitRewards, SleepReward
 
 
 class BaseStatistics:
@@ -14,74 +15,26 @@ class BaseStatistics:
 
     def __init__(self):
         self.path = os.path.join(DATA_DIR, self.filename)
-        self.data = self.template.copy()
-        self.dates = o.DailyNote.get_daily_notes_list()
         if not os.path.exists(self.path):
-            self.data.to_csv(self.path, sep=';')
+            self.template.to_csv(self.path, sep=';')
+            self.data = self.template.copy()
+        else:
+            self.data = self.load_from_csv()
+        self.dates = o.DailyNote.get_daily_notes_list()
 
     def load_from_csv(self):
-        self.data = pd.read_csv(self.path, sep=';')
-        self.data = self.data.astype(self.template.dtypes.to_dict())
+        data = pd.read_csv(self.path, sep=';', index_col=0)
+        return data.astype(self.template.dtypes.to_dict())
 
     def push_to_csv(self):
-        self.data.sort_index(axis=0, inplace=True)
-        self.data.to_csv(self.path, sep=';')
+        self.data\
+            .sort_values(by='date')\
+            .reset_index(drop=True)\
+            .to_csv(self.path, sep=';')
 
-class DaysStatistics(BaseStatistics):
-    # class for working with daystatistics
-    template = pd.DataFrame(
-        columns=[
-            'begin', 
-            'end', 
-            'slept', 
-            'reward', 
-            'fine', 
-            'total', 
-            'balance', 
-            'spent'
-        ]
-    )
-    template = template.astype({
-        'begin': 'datetime64[s]', 
-        'end' : 'datetime64[s]', 
-        'slept': 'timedelta64[s]',
-        'reward': 'Int8',
-        'fine': 'Int8',
-        'total': 'Int8',
-        'balance': 'Int16',
-        'spent': 'Int8'
-    })
-    filename = 'days.csv'
-
-    def __init__(self):
-        super().__init__()
-
-    def load_note(self, date=None):
-        # loads note to current DataFrame by means of DailyNote
-        # if date argument is None, loads note for current_date
-        if date is None:
-            date = max(self.dates)
-        note = o.DailyNote(date)
-        self.data.loc[date] = (
-            pd.to_datetime(note.day_begin, utc=True),
-            pd.to_datetime(note.day_end, utc=True),
-            pd.to_timedelta(note.slept),
-            pd.NA,
-            pd.NA,
-            pd.NA,
-            pd.NA,
-            pd.NA
-        )
-    
-    def calc_reward_for_date(self, date=None):
-        self.sleep_rewards = SleepReward()
-        if date is None:
-            date = max(self.dates)
-        note = o.DailyNote(date)
-        actual_rewards = self.sleep_rewards.data[
-            self.sleep_rewards.data['valid_from'] >= date
-            ]
-        print(actual_rewards)
+    @property
+    def dates_loaded(self):
+        return self.data['date']
 
 class TaskStatistics(BaseStatistics):
     template = pd.DataFrame(
@@ -107,95 +60,63 @@ class TaskStatistics(BaseStatistics):
         if date is None:
             date = max(self.dates)
         note = o.DailyNote(date)
+        if pd.to_datetime(date) in self.dates_loaded.values:
+            self.data = self.data[self.data['date'] != pd.to_datetime(date)]
         for t in note.tasks_list:
-            id = len(self.data)
-            self.data.loc[id] = ({
-                'date': date,
+            inserted_index = max(self.data.index) + 1
+            self.data.loc[inserted_index] = ({
+                'date': dt.datetime.combine(date, dt.time(0, 0, 0)),
                 'name': t.name,
                 'is_done': t.is_done,
                 'reward': t.reward}
             )
+
 
 class HabitsStatistics(BaseStatistics):
     template = pd.DataFrame(
         columns=(
             'date',
             'name',
-            'reward',
-            'result_float',
-            'result_str',
-            'result_bool'
+            'type',
+            'result'
         )
     )
     template = template.astype({
         'date': 'datetime64[s]',
         'name': 'object',
-        'reward': 'Int32',
-        'result_float': 'float64',
-        'result_str': 'object',
-        'result_bool': 'bool'
+        'type': 'object',
+        'result': 'object'
     })
+    template['type'] = pd.Categorical(
+        template['result'],
+        categories=('float', 'bool', 'str', 'datetime')
+    )
     filename = 'habits.csv'
+
     def __init__(self):
         super().__init__()
 
     def load_note(self, date=None):
-        if date is None:
-            date = max(self.dates)
-        note = o.DailyNote(date)
-        rewards = HabitRewards().data # rewards from csv
-        rewards = rewards[
-            (rewards['valid_from'] < date) & (rewards['valid_to'] >= date)]
-        habits_from_rewards = set(rewards['name']) # set of rewards
+        note = o.DailyNote(date if date else max(self.dates))
         for h in note.habits_list:
-            if h.name in (habits_from_rewards):
-                if isinstance(h.value, bool):
-                    reward = rewards[
-                        (rewards['type'] == 'bool') &
-                        (rewards['target_bool'] == h.value) &
-                        (rewards['name'] == h.name)
-                    ]
-                elif isinstance(h.value, float) or isinstance(h.value, int):
-                    reward = rewards[
-                        (rewards['type'] == 'float') &
-                        (rewards['target_float'] <= h.value) &
-                        (rewards['name'] == h.name)
-                    ]
-                    closest_reward = max[rewards]
-                elif isinstance(h.value, str):
-                    reward = rewards[
-                        (rewards['type'] == 'str') &
-                        (rewards['target_str'] == h.value) &
-                        (rewards['name'] == h.name)
-                    ]
-                else:
-                    continue
-                if len(reward) > 0:
-                    id = len(self.data)
-                    max_reward = max(reward['reward'])
-                    self.data.loc[id, [
-                        'date', 
-                        'name', 
-                        'reward', 
-                        'result_float',
-                        'result_str',
-                        'result_bool'
-                        ]] = [
-                        date,
-                        h.name,
-                        max_reward,
-                        max(reward[reward['reward']==max_reward]['target_float']),
-                        max(reward[reward['reward']==max_reward]['target_str']),
-                        max(reward[reward['reward']==max_reward]['target_bool']),
-                    ]
+            inserted_id = len(self.data.index)
+            if isinstance(h.value, bool):
+                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
+                    = [date, h.name, 'bool', str(h.value)]
+            elif isinstance(h.value, (float, int)):
+                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
+                    = [date, h.name, 'float', str(h.value)]
+            elif isinstance(h.value, str):
+                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
+                    = [date, h.name, 'float', str(h.value)]
+            elif isinstance(h.value, dt.datetime):
+                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
+                    = [date, h.name, 'datetime', str(h.value)]
+            else:
+                continue
 
 if __name__ == '__main__':
-    h = HabitsStatistics()
-    t = TaskStatistics()
-    d = DaysStatistics()
-    d.load_note()
-    t.load_note()
-    h.load_note()
-    print(d.data)
-    print(t.data)
-    print(h.data)
+    tasks = TaskStatistics()
+    for i in tasks.dates:
+        tasks.load_note(i)
+    tasks.push_to_csv()
