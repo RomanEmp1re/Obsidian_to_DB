@@ -1,229 +1,219 @@
 # module for managing with data
 
-import pandas as pd
 import datetime as dt
 import os
 from config import DATA_DIR
-import re
+import json
 
+class Habit:
+    def __init__(
+            self, 
+            name:str, 
+            target,
+            reward:int=1, 
+            is_negative=False,
+            valid_from:dt.date=None
+            ):
+        if not isinstance(name, str):
+            raise TypeError('"name" argument must be str type')
+        if not isinstance(reward, (int, float)):
+            raise TypeError('"reward argument must be int or float type')
+        if not isinstance(is_negative, bool):
+            raise TypeError('"is_negative" argument must be boolean type')
+        self.name = name
+        self.reward = reward
+        self.is_negative = is_negative
+        self.target = target
+        self.valid_from = self.validate_date(valid_from, dt.date.today())
 
-class BaseClass:
-    filename : str = None
-    template : pd.DataFrame = None
-    default_valid_to : dt.date = dt.date(2222, 12, 31)
+    def to_dict(self):
+        valid_from = dt.date.isoformat(self.valid_from)
+        return {
+            self.name: {
+                    valid_from: {
+                        'target': self.target,
+                        'reward': self.reward,
+                        'is_neagative': self.is_negative
+                    }
+                }
+            }
 
-    def __init__(self):
-        self.path = os.path.join(DATA_DIR, self.filename)
-        if not os.path.exists(self.path):
-            self.data = self.template
-            self.data.to_csv(self.path, sep=';')
-        self.data = pd.read_csv(self.path, sep=';', index_col=0).reindex()
-        if self.data.empty:
-            self.data = self.template
-
-    def push_changes(self):
-        self.data = self.data.reindex()
-        self.data.to_csv(self.path, sep=';', mode='w')
-
-    def get_actual_data(self, date=None):
-        if date == None:
-            date = dt.date.today()
-        return self.data[
-            (self.data['valid_from'] <= date) &
-            (self.data['valid_to'] > date)
-        ]
-
-class HabitsList(BaseClass):
-    filename = 'habits_dict.csv'
-    template = pd.DataFrame(
-        columns=['unit', 'type']
-    )
-    template['type'] = pd.Categorical(template['type'], categories=('float', 'str', 'bool'))
-
-    def __init__(self):
-        super().__init__()
-
-    def add(self, name, unit=None, type='float'):
-        if any(self.data.index == name):
-            raise ValueError('The habit ' + name + ' already exists!')
+    @staticmethod
+    def validate_date(date, if_none=None):
+        if date is None:
+            return if_none
+        if isinstance(date, dt.datetime):
+            return date.date()
+        elif isinstance(date, str):
+            try:
+                return dt.date.fromisoformat(date)
+            except:
+                raise ValueError('str date must be isoformat')
+        elif isinstance(date, (int, float)):
+            try:
+                return dt.date.fromtimestamp(date)
+            except:
+                raise ValueError('int date must be timestamp with correct value')
+        elif isinstance(date, dt.date):
+            return date
         else:
-            self.data.loc[name] = [unit, type]
-        return
+            raise TypeError(
+                'date must be datetime.date, datetime.datetime, representi'
+                'ng str with isoformat or representing timestamp')
+                
+    @staticmethod
+    def validate_time(time, if_none=None):
+        if time is None:
+            return if_none
+        if isinstance(time, dt.time):
+            return time
+        elif isinstance(time, dt.datetime):
+            return time.time()
+        elif isinstance(time, (float, int)):
+            return dt.datetime.fromtimestamp(time).time()
+        elif isinstance(time, str):
+            try:
+                return dt.time.fromisoformat(str)
+            except:
+                raise ValueError('Time str must be isoformat')
+        else:
+            raise TypeError(
+                'time must be datetime.time, datetime.datetie representing'
+                    'timestamp int/float or str (isoformat)')
 
-    def drop(self, name):
-        self.data = self.data[self.data.index != name]
+class NumericHabit(Habit):
+    def __init__(
+            self, 
+            name:str, 
+            target:float,
+            unit:str,
+            reward:int=1, 
+            is_negative:bool=False,
+            valid_from:dt.date=None):
+        if not isinstance(target, (int, float)):
+            raise TypeError('"target" argument must be a number')
+        super().__init__(name, target, reward, is_negative, valid_from)
+        self.unit = unit
 
-    def get_actual_data(self, date=None):
-        raise NotImplementedError('This method is not allowed for HabitsList')
+    def to_dict(self):
+        result = super().to_dict()
+        result[self.name][self.valid_from.isoformat()]['unit'] = self.unit
+        return result
 
-
-class HabitRewards(BaseClass):
-    filename = 'habits_rewards.csv'
-    template = pd.DataFrame(
-        columns=[
-            'name', 'type','target', 'reward', 'valid_from', 'valid_to'
-            ]
-    )
-    template = template.astype({
-        'name': 'object', 
-        'type' : 'datetime64[s]', 
-        'target': 'object',
-        'reward': 'Int16',
-        'valid_from': 'datetime64[s]',
-        'valid_to': 'datetime64[s]'
-    })
-    template['type'] = pd.Categorical(
-        template['type'],
-        categories=('str', 'bool', 'float')
+    def __str__(self):
+        return (
+            f'{self.name}\ntarget : '
+            f'{'less than ' if self.is_negative else 'greater than '}'
+            f'{self.target} {self.unit}\nreward : {self.reward}'
         )
 
-    def __init__(self):
-        super().__init__()
-
-    def add(
-            self, 
-            habit,
-            target,
-            reward,
-            valid_from=None,
-            valid_to=None
-    ):
-        if valid_from is None:
-            valid_from = dt.date.today()
-        elif isinstance(valid_from, dt.datetime):
-            valid_from = valid_from.date()
-        if valid_to is None:
-            valid_to = self.default_valid_to
-        elif isinstance(valid_to, dt.datetime):
-            valid_to = valid_to.date()
-        id = len(self.data)
-        self.data.loc[id, ('name', 'reward', 'valid_from', 'valid_to')] = (
-            habit, reward,
-            valid_from, valid_to)
-        target = target.strip()
-        if target in ('True', 'False'):
-            self.data.loc[id, ('type', 'target')] = ['bool', target]
-        elif re.search(r'[][[(]([0-9.]*)+[,;-]([0-9.]*)[])]', target.replace(' ', '')):
-            # ищем выражение диапазона, типа [1-2], (0,6], [7, 12.2)
-            self.data.loc[id, ('type', 'target')] = ['float', target.replace(' ', '')]
-        else:
-            self.data.loc[id, ('type', 'target')] = ['str', 'target']
-
-    def drop(self, id=None, name=None, valid_from=None,
-                    valid_to=None, reward=None):
-        if name:
-            mask_name = self.data['name'] == name
-        else:
-            mask_name = True
-        if id:
-            mask_id = self.data.index == id
-        else:
-            mask_id = True
-        if valid_from:
-            mask_valid_from = self.data['valid_from'] == valid_from
-        else:
-            mask_valid_from = True
-        if valid_to:
-            mask_valid_to = self.data['valid_to'] == valid_to
-        else:
-            mask_valid_to = True
-        if reward:
-            mask_reward = self.data['reward'] == reward
-        else:
-            mask_reward = True
-        mask_for_delete = ~(mask_name & mask_valid_from &
-                            mask_id & mask_valid_to & mask_reward)
-        self.data = self.data[mask_for_delete]
-
-class SleepReward(BaseClass):
-    filename = 'sleep_rewards.csv'
-    template = pd.DataFrame(
-        columns=['time', 'kind', 'reward', 'valid_from', 'valid_to']
-    )
-    template = template.astype({
-        'time': 'datetime64[ns]', 
-        'kind' : 'object', 
-        'reward': 'int16',
-        'valid_from': 'datetime64[s]',
-        'valid_to': 'datetime64[s]'
-    })
-
-    def __init__(self):
-        super().__init__()
-    
-    def add(
+class BooleanHabit(Habit):
+    def __init__(
         self,
-        time: dt.time,
-        kind: str, 
-        reward: int, 
-        valid_from=None,
-        valid_to=None,
-        is_next_day=False
+        name:str,
+        target:bool,
+        reward:int=1,
+        is_negative:bool=False,
+        valid_from:dt.date=None
         ):
-        if valid_from is None:
-            valid_from = dt.date.today()
-        if valid_to is None:
-            valid_to = self.default_valid_to
-        elif isinstance(valid_from, dt.datetime):
-            valid_from = valid_from.date()
-        elif isinstance(valid_to, dt.datetime):
-            valid_to = valid_to.date()
-        minutes_since_time = time.hour*60 + time.minute
-        if is_next_day:
-            minutes_since_time += 1440
-        id = len(self.data)
-        self.data.loc[id] = [
-            minutes_since_time,
-            kind,
-            reward,
-            valid_from,
-            valid_to
-        ]
+        if not isinstance(target, bool):
+            raise TypeError('"target" argument must be bool type')
+        super().__init__(name, target, reward, is_negative, valid_from)
 
-    def drop(self, time=None, 
-        is_next_day=None, 
-        valid_from=None, 
-        valid_to=None,
-        reward=None):
-        default_mask = pd.Series([True for i in self.data.index], index = self.data.index.values)
-        if time:
-            minutes_since_time = time.hour*60 + time.minute
-            if is_next_day:
-                minutes_since_time += 1440
-            mask_name = self.data['time'] == minutes_since_time
-        else:
-            mask_name = default_mask
-        if valid_from:
-            mask_valid_from = self.data['valid_from'] == valid_from
-        else:
-            mask_valid_from = default_mask
-        if valid_to:
-            mask_valid_to = self.data['valid_to'] == valid_to
-        else:
-            mask_valid_to = default_mask
-        if reward:
-            mask_reward = self.data['reward'] == reward
-        else:
-            mask_reward = default_mask
-        mask_for_delete = ~(mask_name & mask_valid_to & mask_valid_from & mask_reward)
-        self.data = self.data[mask_for_delete]
+    def __str__(self):
+        return (
+            f'{self.name}\ntarget : {'not' if self.is_negative else ''} '
+            f'{'completed' if self.target else 'missed'}'
+            f'\nreward : {self.reward}'
+        )
+
+class StrListHabit(Habit):
+    def __init__(
+        self,
+        name:str,
+        target:list,
+        reward:list,
+        is_negative:bool=False,
+        valid_from:dt.date=None
+    ):
+        if (
+            not isinstance(target, (list, tuple)) 
+            or any([not isinstance(i, str) for i in target])
+        ):
+            raise TypeError('"target" argument must be list/tuple of str')
+        if (
+            not isinstance(reward, (list, tuple)) 
+            or any([not isinstance(i, (int, float)) for i in reward])
+        ):
+            raise TypeError('"reward" argument must be list/tuple of int')
+        if len(target) != len(reward):
+            raise ValueError('"reward" and "target" arguments must be list or\
+                              tuple with same length')
+        if not isinstance(name, str):
+            raise TypeError('"name" argument must be str type')
+        if not isinstance(is_negative, bool):
+            raise TypeError('"is_negative" argument must be boolean type')
+        self.name = name
+        self.reward = reward
+        self.is_negative = is_negative
+        self.target = target
+        self.valid_from = super().validate_date(valid_from, dt.date.today())
+        self.rewards_dict = dict(zip(self.target, self.reward))
+
+    def __str__(self):
+        return f'{self.name}\ntargets : \n{'\n'.join(
+            '  ' + k + ' - ' + str(i)
+            for k, i in self.rewards_dict.items())}'
+
+
+class TimeHabit(Habit):
+    def __init__(
+        self,
+        name:str,
+        target:dt.time,
+        reward:list,
+        is_negative:bool=False,
+        valid_from:dt.date=None
+    ):
+        super().__init__(name, target, reward, is_negative, valid_from)
+        self.target = super().validate_time(target)
+        self.time_str = self.target.isoformat()
+        self.target = self.target.hour*60 + self.target.minute
+
+    def __str__(self):
+        return (
+            f'{self.name}\ntarget : '
+            f'{'earlier than' if self.is_negative else 'later than'} '
+            f'{self.time_str}\nreward : {self.reward}'
+        )
+
+class ManageJson:
+    def __init__(self):
+        self.path=os.path.join(DATA_DIR, 'habits.json')
+        if not os.path.exists(self.path):
+            with open(self.path, 'w') as f:
+                json.dump({}, f)
+        with open (self.path, 'r') as f:
+            self.data = json.load(f)
+
+    def update(self, habit:Habit):
+        self.data.update(habit.to_dict())
+
+    def remove(self, habit, valid_from=None):
+        if valid_from is None:
+            del self.data[habit]
+        if valid_from is not None:
+            del self.data[habit][valid_from.isoformat()]
+
+    def dump(self):
+        f = open(self.path, 'w')
+        json.dump(self.data, f)
+        f.close()
 
 
 if __name__ == '__main__':
-    # test HabitRewards
-    # opening and creating empty_dataframe
-    '''h = HabitRewards()
-    # adding habit float
-    h.add('Спорт', '(0;60)', 2, valid_to=dt.date(2001, 11, 1))
-    h.add('Спорт', '(;0]', 1)
-    h.add('Чтение', '(;0]', 1)
-    h.add('Чтение', '(0;10]', 1)
-    h.add('Чтение', '(10;)', 1)
-    s = SleepReward()
-    s.add(dt.time(10, 0, 0), 'begin', 2, valid_from=dt.date(2020, 1, 1))
-    s.add(dt.time(10, 30, 0), 'begin', 1, valid_to = dt.date(2029, 2, 1))'''
-    h = HabitsList()
-    h.add('footbal', 120, 'float')
-    print(h.data)
-    h.push_changes()
-
+    h1 = StrListHabit(name='sport', target=['gym', 'football', 'jogging', 'walking'], reward=[2, 2, 1, 1])
+    h2 = BooleanHabit(name='faping', target=True, reward=1, is_negative=True)
+    h3 = NumericHabit(name='reading', target=15, unit='minutes', reward=1)
+    h4 = TimeHabit('sleep', dt.time(22, 0), 1, True)
+    print(h4)
