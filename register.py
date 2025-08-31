@@ -36,6 +36,42 @@ class BaseStatistics:
     def dates_loaded(self):
         return self.data['date']
 
+    def drop(
+        self,
+        id:int=None,
+        name:str=None,
+        date:dt.date=None,
+        intersect=True
+    ):
+        if id is None and name is None and date is None:
+            self.data = self.template
+            return
+        if id is not None:
+            if not isinstance(id, int):
+                raise TypeError('id argument must be int type')
+            else:
+                mask_id = self.data.index != id
+        else:
+            mask_id = True
+        if name is not None:
+            if not isinstance(name, str):
+                raise TypeError('name argument must be str type')
+            else:
+                mask_name = self.data['name'] != name
+        else:
+            mask_name = True
+        if date is not None:
+            if not isinstance(name, dt.date):
+                raise TypeError('name argument must be date type')
+            else:
+                mask_date = self.data['name'] != pd.to_datetime(date)
+        else:
+            mask_date = True
+        if intersect:
+            self.data = self.data[(mask_id & mask_date & mask_name)]
+        else:
+            self.data = self.data[(mask_id | mask_date | mask_name)]
+
 class TaskStatistics(BaseStatistics):
     template = pd.DataFrame(
         columns=(
@@ -70,7 +106,7 @@ class TaskStatistics(BaseStatistics):
                 'is_done': t.is_done,
                 'reward': t.reward}
             )
-
+    
 
 class HabitsStatistics(BaseStatistics):
     template = pd.DataFrame(
@@ -97,26 +133,21 @@ class HabitsStatistics(BaseStatistics):
         super().__init__()
 
     def load_note(self, date=None):
+        note = o.DailyNote(date)
+        if pd.to_datetime(date) in self.dates_loaded.values:
+            self.data = self.data[self.data['date'] != pd.to_datetime(date)]
         note = o.DailyNote(date if date else max(self.dates))
         for h in note.habits_list:
-            inserted_id = len(self.data.index)
+            inserted_id = max(self.data.index) + 1
             if isinstance(h.value, bool):
-                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
-                    = [date, h.name, 'bool', str(h.value)]
+                inserted_type = 'bool'
             elif isinstance(h.value, (float, int)):
-                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
-                    = [date, h.name, 'float', str(h.value)]
+                inserted_type = 'float'
             elif isinstance(h.value, str):
-                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
-                    = [date, h.name, 'float', str(h.value)]
+                inserted_type = 'str'
             elif isinstance(h.value, dt.datetime):
-                self.data.loc[inserted_id, ['date', 'name', 'type', 'result']]\
-                    = [date, h.name, 'datetime', str(h.value)]
+                inserted_type = 'datetime'
             else:
                 continue
-
-if __name__ == '__main__':
-    tasks = TaskStatistics()
-    for i in tasks.dates:
-        tasks.load_note(i)
-    tasks.push_to_csv()
+            self.data.loc[inserted_id, ['date', 'name', 'type', 'result']] =\
+                [date, h.name, inserted_type, str(h.value)]

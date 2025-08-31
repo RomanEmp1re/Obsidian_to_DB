@@ -129,9 +129,3 @@ class Habit:
     
     def __str__(self):
         return self.name + ' - ' + str(self.value)
-
-
-if __name__ == '__main__':
-    my_date = dt.date(2025, 6, 2)
-    d = DailyNote(my_date)
-    print(d.describe())

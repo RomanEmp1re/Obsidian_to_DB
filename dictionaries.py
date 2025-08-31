@@ -209,11 +209,3 @@ class ManageJson:
         f = open(self.path, 'w')
         json.dump(self.data, f)
         f.close()
-
-
-if __name__ == '__main__':
-    h1 = StrListHabit(name='sport', target=['gym', 'football', 'jogging', 'walking'], reward=[2, 2, 1, 1])
-    h2 = BooleanHabit(name='faping', target=True, reward=1, is_negative=True)
-    h3 = NumericHabit(name='reading', target=15, unit='minutes', reward=1)
-    h4 = TimeHabit('sleep', dt.time(22, 0), 1, True)
-    print(h4)
