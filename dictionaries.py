@@ -4,6 +4,7 @@ import datetime as dt
 import os
 from config import DATA_DIR
 import json
+import re
 
 class Habit:
     def __init__(
@@ -27,13 +28,12 @@ class Habit:
         self.valid_from = self.validate_date(valid_from, dt.date.today())
 
     def to_dict(self):
-        valid_from = dt.date.isoformat(self.valid_from)
         return {
             self.name: {
-                    valid_from: {
+                    self.valid_from: {
                         'target': self.target,
                         'reward': self.reward,
-                        'is_neagative': self.is_negative
+                        'is_negative': self.is_negative
                     }
                 }
             }
@@ -97,7 +97,7 @@ class NumericHabit(Habit):
 
     def to_dict(self):
         result = super().to_dict()
-        result[self.name][self.valid_from.isoformat()]['unit'] = self.unit
+        result[self.name][self.valid_from]['unit'] = self.unit
         return result
 
     def __str__(self):
@@ -111,7 +111,7 @@ class BooleanHabit(Habit):
     def __init__(
         self,
         name:str,
-        target:bool,
+        target:bool=True,
         reward:int=1,
         is_negative:bool=False,
         valid_from:dt.date=None
@@ -171,7 +171,7 @@ class TimeHabit(Habit):
         self,
         name:str,
         target:dt.time,
-        reward:list,
+        reward:int,
         is_negative:bool=False,
         valid_from:dt.date=None
     ):
@@ -179,6 +179,12 @@ class TimeHabit(Habit):
         self.target = super().validate_time(target)
         self.time_str = self.target.isoformat()
         self.target = self.target.hour*60 + self.target.minute
+
+    def to_dict(self):
+        result = super().to_dict()
+        result[self.name][self.valid_from]['unit'] =\
+            'minutes from the beggining of the day'
+        return result
 
     def __str__(self):
         return (
@@ -194,7 +200,25 @@ class ManageJson:
             with open(self.path, 'w') as f:
                 json.dump({}, f)
         with open (self.path, 'r') as f:
-            self.data = json.load(f)
+            self.data = json.load(f, object_hook=self.parse_date)
+
+    @staticmethod
+    def parse_date(data):
+        result = {}
+        for k, v in data.items():
+            if isinstance(v, str):
+                try:
+                    result[k] = dt.date.fromisoformat(v)
+                except ValueError:
+                    result[k] = v
+            elif isinstance (k, str):
+                try:
+                    result[dt.date.fromisoformat(k)] = v
+                except ValueError:
+                    result[k] = v
+            else:
+                result[k] = v
+        return result
 
     def update(self, habit:Habit):
         self.data.update(habit.to_dict())
@@ -206,6 +230,61 @@ class ManageJson:
             del self.data[habit][valid_from.isoformat()]
 
     def dump(self):
+        for habit, targets in self.data.items():
+            converted_habit = {}
+            for valid_from, val in targets.items():
+                if isinstance(val['target'], str):
+                    if re.match(
+                        r'^([0-1][0-9]|2[0-3]):[0-5][0-9].*', 
+                        val['target']):
+                        val['target'] = val['target'].isoformat()
+                converted_habit.update({valid_from.isoformat(): val})
+            self.data[habit] = converted_habit
         f = open(self.path, 'w')
         json.dump(self.data, f)
         f.close()
+
+    def get_actual_rules(self, date=dt.date(2025, 9, 2)):
+        Habit.validate_date(date, dt.date.today())
+        actual_date = dt.date.today()
+        result = {}
+        for habit, rules in self.data.items():
+            if len(rules) > 1:
+                for d, r in rules:
+                    actual_rules = {k : v for k, v in rules.items() if k >= actual_date}
+                    latest_rule = max(actual_rules.keys())
+                    result.update({habit:rules[latest_rule]})
+            else:
+                result.update({habit:rules})
+        return result
+
+
+if __name__ == '__main__':
+    new_habit1 = NumericHabit(
+        name='reading',
+        target=30, 
+        unit='minutes',
+        valid_from=dt.date(2025, 9, 10))
+    new_habit2 = NumericHabit(
+        name='self-education', 
+        target=60, 
+        unit='minutes',
+        is_negative=False, 
+        valid_from=dt.date(2025, 9, 10))
+    new_habit3 = BooleanHabit(
+        name='Morning exercises',
+        valid_from=dt.date(2025, 9, 10))
+    new_habit4 = TimeHabit(
+        name='Wake up',
+        target=dt.time(5, 30),
+        reward=1,
+        valid_from=dt.date(2021, 1, 1)
+    )
+    a = ManageJson()
+    print(a.data)
+    a.update(new_habit1)
+    a.update(new_habit2)
+    a.update(new_habit3)
+    a.update(new_habit4)
+    a.dump()
+    print(a.get_actual_rules())
