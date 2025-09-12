@@ -5,8 +5,39 @@
 import pandas as pd
 import register
 import dictionaries
+import datetime as dt
 import config
 import os
+
+
+class TasksRep(register.BaseStatistics):
+    filename = 'tasks_report.csv'
+    template = pd.DataFrame(
+        columns=[
+            'date',
+            'task',
+            'reward',
+            'completed',
+            'earned_reward'
+        ]
+    )
+    template = template.astype({
+        'date': 'datetime64[s]',
+        'task': 'object',
+        'reward': 'Int16',
+        'completed': 'bool',
+        'earned_reward': 'Int16'
+    })
+
+    def __init__(self):
+        super().__init__()
+
+    def get_registered_data(self):
+        return register.TaskStatistics().data
+
+    def calc_data(self):
+        self.data = self.get_registered_data()
+        self.data['earned'] = self.data['reward'] * self.data['is_done']
 
 
 class DatesRep(register.BaseStatistics):
@@ -32,6 +63,11 @@ class DatesRep(register.BaseStatistics):
 
     def __init__(self):
         super().__init__()
-        rules = dictionaries.ManageJson
-        print(rules.get_actual_rules())
+
+if __name__ == '__main__':
+    a = TasksRep()
+    a.calc_data()
+    print(a.data)
+    a.push_to_csv()
+
     

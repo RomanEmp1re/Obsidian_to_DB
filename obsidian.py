@@ -73,7 +73,7 @@ class DailyNote:
             logging.warning("Block with tasks wasn't found")
             return []
         task_lines = tasks_block.group(1).splitlines()
-        task_pattern = re.compile(r"- \[( |x)\] ([A-z0-9]+)")
+        task_pattern = re.compile(r"- \[( |x)\] ([A-zА-я0-9\s]+)")
         reward_pattern = re.compile(r".*\((\d+)\)")
         tasks = []
         for line in task_lines:
@@ -129,3 +129,7 @@ class Habit:
     
     def __str__(self):
         return self.name + ' - ' + str(self.value)
+    
+if __name__ == '__main__':
+    d = DailyNote(dt.date(2025, 8, 1))
+    print(d.tasks_list)

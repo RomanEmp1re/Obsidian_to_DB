@@ -99,7 +99,10 @@ class TaskStatistics(BaseStatistics):
         if pd.to_datetime(date) in self.dates_loaded.values:
             self.data = self.data[self.data['date'] != pd.to_datetime(date)]
         for t in note.tasks_list:
-            inserted_index = max(self.data.index) + 1
+            if len(self.data.index) != 0:
+                inserted_index = max(self.data.index) + 1
+            else:
+                inserted_index = 0
             self.data.loc[inserted_index] = ({
                 'date': dt.datetime.combine(date, dt.time(0, 0, 0)),
                 'name': t.name,
@@ -151,3 +154,9 @@ class HabitsStatistics(BaseStatistics):
                 continue
             self.data.loc[inserted_id, ['date', 'name', 'type', 'result']] =\
                 [date, h.name, inserted_type, str(h.value)]
+
+if __name__ == '__main__':
+    t = TaskStatistics()
+    for i in range(1, 10):
+        t.load_note(dt.date(2025, 8, i))
+    t.push_to_csv()
