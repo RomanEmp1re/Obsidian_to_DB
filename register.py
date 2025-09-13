@@ -127,7 +127,7 @@ class HabitsStatistics(BaseStatistics):
         'result': 'object'
     })
     template['type'] = pd.Categorical(
-        template['result'],
+        template['type'],
         categories=('float', 'bool', 'str', 'datetime')
     )
     filename = 'habits.csv'
