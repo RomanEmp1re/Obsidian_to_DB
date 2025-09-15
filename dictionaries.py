@@ -33,8 +33,9 @@ class Habit:
             'reward': [self.reward],
             'is_negative': [self.is_negative],
             'target': [self.target],
+            'type': [pd.Na],
             'valid_from': [self.valid_from],
-            'unit': [self.unit]
+            'unit': [self.unit],
         })
         self.pd_row['unit'] = self.pd_row['unit'].astype('object')
 
@@ -95,6 +96,7 @@ class NumericHabit(Habit):
             raise TypeError('"target" argument must be a number')
         target = str(target)
         super().__init__(name, target, unit, reward, is_negative, valid_from)
+        self.pd_row['type'] = ['float']
 
     def __str__(self):
         return (
@@ -117,6 +119,7 @@ class BooleanHabit(Habit):
             raise TypeError('"target" argument must be bool type')
         target = str(target)
         super().__init__(name, target, unit, reward, is_negative, valid_from)
+        self.pd_row['type'] = ['bool']
 
     def __str__(self):
         return (
@@ -141,6 +144,7 @@ class TimeHabit(Habit):
         self.time_str = dt.time(target//60, target%60)
         target = str(target)
         super().__init__(name, target, unit, reward, is_negative, valid_from)
+        self.pd_row['type'] = 'time'
 
     def __str__(self):
         return (
@@ -158,10 +162,20 @@ class RegisterRules(BaseStatistics):
             'reward',
             'is_negative',
             'target',
+            'type',
             'valid_from',
             'unit'
         ]
     )
+    types_dict = {
+        'name' : 'object',
+        'reward' : 'Int16',
+        'is_negative' : 'bool',
+        'target' : 'object',
+        'type' : 'object',
+        'valid_from' : 'datetime64[ns]',
+        'unit' : 'object'
+    }
     def __init__(self):
         self.path = os.path.join(DATA_DIR, self.filename)
         if not os.path.exists(self.path):
@@ -169,6 +183,7 @@ class RegisterRules(BaseStatistics):
             self.data = self.template.copy()
         else:
             self.data = self.load_from_csv()
+        self.data = self.data.astype(self.types_dict)
         
     def update(self, habit:Habit):
         # inserts new habit row into datafrane. Replaces old if valid_from and name already in it
@@ -179,7 +194,7 @@ class RegisterRules(BaseStatistics):
 
     def get_actual_rules(self, as_of_date:dt.date=None):
         as_of_date = Habit.validate_date(as_of_date, if_none=dt.date.today())
-        indexes = self.data[self.data['valid_from'] <= as_of_date]\
+        indexes = self.data[self.data['valid_from'] <= pd.to_datetime(as_of_date)]\
             .groupby('name')['valid_from']\
             .idxmax()
         return self.data.loc[indexes]
@@ -189,19 +204,7 @@ class RegisterRules(BaseStatistics):
             .sort_values(by='valid_from')\
             .reset_index(drop=True)\
             .to_csv(self.path, sep=';')
-
-
+        
 if __name__ == '__main__':
-    hs = (
-        NumericHabit('self education', 60, unit='minutes'),
-        TimeHabit('wake up', 330, valid_from=dt.date(2026, 1, 1)),
-        BooleanHabit('meditation'),
-        NumericHabit('hobby', 30, valid_from=dt.date(2021, 12, 11)),
-        NumericHabit('hobby', 40),
-        NumericHabit('hobby', 40, valid_from=dt.date(2011, 7, 3))
-    )
-    stat = RegisterRules()
-    for h in hs:
-        stat.update(h)
-    print(stat.data)
-    stat.push_to_csv()
+    a = RegisterRules()
+    print(a.get_actual_rules())
