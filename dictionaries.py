@@ -197,7 +197,9 @@ class RegisterRules(BaseStatistics):
         indexes = self.data[self.data['valid_from'] <= pd.to_datetime(as_of_date)]\
             .groupby('name')['valid_from']\
             .idxmax()
-        return self.data.loc[indexes]
+        out = self.data.loc[indexes]
+        out['unit'] = out['unit'].fillna("")
+        return out
 
     def push_to_csv(self):
         self.data\

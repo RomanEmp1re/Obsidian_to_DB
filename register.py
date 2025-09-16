@@ -12,6 +12,7 @@ from config import DATA_DIR
 class BaseStatistics:
     template: pd.DataFrame = None
     filename: str = None
+    types_dict = None
 
     def __init__(self):
         self.path = os.path.join(DATA_DIR, self.filename)
@@ -20,6 +21,7 @@ class BaseStatistics:
             self.data = self.template.copy()
         else:
             self.data = self.load_from_csv()
+        self.data = self.data.astype(self.types_dict)
         self.dates = o.DailyNote.get_daily_notes_list()
 
     def load_from_csv(self):
@@ -81,12 +83,12 @@ class TaskStatistics(BaseStatistics):
             'reward'
         )
     )
-    template = template.astype({
+    types_dict = {
         'date': 'datetime64[s]',
         'name': 'object',
         'is_done': 'bool',
         'reward': 'Int32'
-    })
+    }
     filename = 'tasks.csv'
 
     def __init__(self):
@@ -120,20 +122,20 @@ class HabitsStatistics(BaseStatistics):
             'result'
         )
     )
-    template = template.astype({
+    types_dict = {
         'date': 'datetime64[s]',
         'name': 'object',
         'type': 'object',
         'result': 'object'
-    })
-    template['type'] = pd.Categorical(
-        template['type'],
-        categories=('float', 'bool', 'str', 'datetime')
-    )
+    }
     filename = 'habits.csv'
 
     def __init__(self):
         super().__init__()
+        self.data['type'] = pd.Categorical(
+            self.data['type'],
+            categories=('float', 'bool', 'str', 'datetime')
+        )
 
     def load_note(self, date=None):
         note = o.DailyNote(date)
